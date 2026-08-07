@@ -1,4 +1,4 @@
--- Auto Summoner Pro | Refactored & Humanized Production Suite
+-- Auto Summoner Pro | Refactored & Dynamic Auto-Max Pull Engine
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -14,6 +14,7 @@ local Information = require(Shared:WaitForChild("Information"))
 
 local math_floor = math.floor
 local math_max = math.max
+local math_min = math.min
 local string_format = string.format
 local task_wait = task.wait
 local task_spawn = task.spawn
@@ -79,7 +80,6 @@ local currentTheme = Themes.Dark
 -- State Management
 local activeBanners, activeBannersFull = {"Standard"}, {}
 local selectedBanner = "Standard"
-local summonAmount = 10
 local isAutoSummoning = false
 local skipAnimation = true
 local currentSessionPulls = 0
@@ -297,16 +297,20 @@ local function getPityData(bannerId)
     return maxPity, currentPity
 end
 
-local function checkCurrencyRequirement()
+-- Dynamic Auto-Max Pull Calculation (Up to 50 down to 1)
+local function getOptimalSummonAmount()
     local bannerData = activeBannersFull[selectedBanner] and activeBannersFull[selectedBanner].Data
     local bannerInfo = bannerData and bannerData.BannerInfo
     local costPerPull = bannerInfo and bannerInfo.Cost or 50
     local currencyName = bannerInfo and bannerInfo.Currency or "Gem"
-    local totalCost = costPerPull * summonAmount
     local currentBalance = getCurrencyAmount(currencyName)
-    local isEnough = (currentBalance >= totalCost)
     local maxAffordablePulls = (costPerPull > 0) and math_floor(currentBalance / costPerPull) or 0
-    return isEnough, totalCost, currentBalance, currencyName, costPerPull, maxAffordablePulls
+    
+    local optimalPulls = math_min(50, maxAffordablePulls)
+    local isEnough = (optimalPulls > 0)
+    local totalCost = optimalPulls * costPerPull
+    
+    return isEnough, totalCost, currentBalance, currencyName, costPerPull, maxAffordablePulls, optimalPulls
 end
 
 -- UI Layout Construction
@@ -465,7 +469,7 @@ local CloseBtnStroke = applyStroke(CloseBtn, currentTheme.Stroke, 1)
 
 CloseBtn.MouseButton1Click:Connect(function() setGuiVisibleSmooth(false) end)
 
-local TitleLabel = createLabel(TopBar, UDim2.new(1, -152, 1, 0), UDim2.new(0, 48, 0, 0), "✨ AUTO SUMMON (Vitka lox)", currentTheme.Text, Enum.Font.GothamBold, 12)
+local TitleLabel = createLabel(TopBar, UDim2.new(1, -152, 1, 0), UDim2.new(0, 48, 0, 0), "✨ AUTO SUMMON PRO", currentTheme.Text, Enum.Font.GothamBold, 12)
 local ThemeToggleBtn = createButton(TopBar, UDim2.new(0, 95, 0, 28), UDim2.new(1, -101, 0, 8), "🌙 Dark Glass", currentTheme.CardBg, currentTheme.Text, 10)
 applyCorner(ThemeToggleBtn, 8)
 local ThemeStroke = applyStroke(ThemeToggleBtn, currentTheme.Stroke, 1)
@@ -572,17 +576,7 @@ UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 3)
 UIListLayout.Parent = BannerListFrame
 
-local AmountFrame = createFrame(TabFrameSummon, UDim2.new(1, 0, 0, 32), UDim2.new(0, 0, 0, 56), currentTheme.TopBarBg, currentTheme.TopBarTrans)
-applyCorner(AmountFrame, 8)
-
-local BtnX1 = createButton(AmountFrame, UDim2.new(0.333, -3, 1, -6), UDim2.new(0, 3, 0, 3), "x1", currentTheme.CardBg, currentTheme.SubText, 12, Enum.Font.GothamMedium)
-applyCorner(BtnX1, 6)
-local BtnX10 = createButton(AmountFrame, UDim2.new(0.333, -3, 1, -6), UDim2.new(0.333, 1, 0, 3), "x10", currentTheme.Accent, currentTheme.AccentText, 12, Enum.Font.GothamBold)
-applyCorner(BtnX10, 6)
-local BtnX50 = createButton(AmountFrame, UDim2.new(0.333, -3, 1, -6), UDim2.new(0.666, 0, 0, 3), "x50", currentTheme.CardBg, currentTheme.SubText, 12, Enum.Font.GothamMedium)
-applyCorner(BtnX50, 6)
-
-local AnimToggleBtn = createButton(TabFrameSummon, UDim2.new(1, 0, 0, 32), UDim2.new(0, 0, 0, 94), "  ⚡ Fast / Skip Animation", currentTheme.CardBg, currentTheme.Text, 11, Enum.Font.GothamBold)
+local AnimToggleBtn = createButton(TabFrameSummon, UDim2.new(1, 0, 0, 32), UDim2.new(0, 0, 0, 56), "  ⚡ Fast / Skip Animation", currentTheme.CardBg, currentTheme.Text, 11, Enum.Font.GothamBold)
 AnimToggleBtn.TextXAlignment = Enum.TextXAlignment.Left
 applyCorner(AnimToggleBtn, 8)
 local AnimToggleStroke = applyStroke(AnimToggleBtn, currentTheme.Stroke, 1)
@@ -601,10 +595,10 @@ end
 
 AnimToggleBtn.MouseButton1Click:Connect(function() setSwitchState(not skipAnimation) end)
 
-local ToggleBtn = createButton(TabFrameSummon, UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 0, 132), "▶ START AUTO SUMMON", currentTheme.Success, Color3.fromRGB(255, 255, 255), 13)
+local ToggleBtn = createButton(TabFrameSummon, UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 0, 96), "▶ START AUTO SUMMON", currentTheme.Success, Color3.fromRGB(255, 255, 255), 13)
 applyCorner(ToggleBtn, 10)
 
-local StatsFrame = createFrame(TabFrameSummon, UDim2.new(1, 0, 0, 94), UDim2.new(0, 0, 0, 180), currentTheme.CardBg, currentTheme.CardTrans)
+local StatsFrame = createFrame(TabFrameSummon, UDim2.new(1, 0, 0, 94), UDim2.new(0, 0, 0, 146), currentTheme.CardBg, currentTheme.CardTrans)
 applyCorner(StatsFrame, 10)
 local StatsStroke = applyStroke(StatsFrame, currentTheme.Stroke, 1)
 
@@ -612,8 +606,8 @@ local CanOpenLabel = createLabel(StatsFrame, UDim2.new(1, -20, 0, 20), UDim2.new
 local SecretPityLabel = createLabel(StatsFrame, UDim2.new(1, -20, 0, 20), UDim2.new(0, 10, 0, 32), "🔮 Until Secret Pity: N/A", currentTheme.Purple, Enum.Font.GothamBold, 11)
 local MythicPityLabel = createLabel(StatsFrame, UDim2.new(1, -20, 0, 20), UDim2.new(0, 10, 0, 56), "🌟 Until Mythic Pity: 0 pulls", currentTheme.Gold, Enum.Font.GothamBold, 11)
 
-local StatusLabel = createLabel(TabFrameSummon, UDim2.new(1, 0, 0, 16), UDim2.new(0, 0, 0, 280), "Status: Idle | Total: 0", currentTheme.SubText, Enum.Font.GothamMedium, 10, Enum.TextXAlignment.Center)
-local CurrencyLabel = createLabel(TabFrameSummon, UDim2.new(1, 0, 0, 16), UDim2.new(0, 0, 0, 296), "Balance: 0 Gem | Required: 500 Gem", currentTheme.Text, Enum.Font.GothamMedium, 10, Enum.TextXAlignment.Center)
+local StatusLabel = createLabel(TabFrameSummon, UDim2.new(1, 0, 0, 16), UDim2.new(0, 0, 0, 246), "Status: Idle | Total: 0", currentTheme.SubText, Enum.Font.GothamMedium, 10, Enum.TextXAlignment.Center)
+local CurrencyLabel = createLabel(TabFrameSummon, UDim2.new(1, 0, 0, 16), UDim2.new(0, 0, 0, 262), "Balance: 0 Gem | Cost: 50 Gem/pull", currentTheme.Text, Enum.Font.GothamMedium, 10, Enum.TextXAlignment.Center)
 
 -- TAB 2: 🏆 DROPS & WEBHOOK
 local WebhookFrame = createFrame(TabFrameDrops, UDim2.new(1, 0, 0, 34), UDim2.new(0, 0, 0, 0), currentTheme.CardBg, currentTheme.CardTrans)
@@ -906,13 +900,6 @@ applyThemeToUI = function(theme)
     tween(DropStroke, { Color = theme.Stroke })
     tween(BannerListFrame, { BackgroundColor3 = theme.CardBg, BackgroundTransparency = theme.MainTrans })
     tween(ListStroke, { Color = theme.Stroke })
-    tween(AmountFrame, { BackgroundColor3 = theme.TopBarBg, BackgroundTransparency = theme.TopBarTrans })
-
-    local chips = { {BtnX1, 1}, {BtnX10, 10}, {BtnX50, 50} }
-    for _, item in ipairs(chips) do
-        local selected = (summonAmount == item[2])
-        tween(item[1], { BackgroundColor3 = selected and theme.Accent or theme.CardBg, BackgroundTransparency = selected and 0 or theme.CardTrans, TextColor3 = selected and theme.AccentText or theme.SubText })
-    end
 
     tween(AnimToggleBtn, { BackgroundColor3 = theme.CardBg, BackgroundTransparency = theme.CardTrans, TextColor3 = theme.Text })
     tween(AnimToggleStroke, { Color = theme.Stroke })
@@ -955,8 +942,12 @@ ThemeToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 local function updateCurrencyState()
-    local isEnough, totalCost, currentBalance, currencyName, _, maxAffordablePulls = checkCurrencyRequirement()
-    CurrencyLabel.Text = string_format("Balance: %s %s | Cost (x%d): %s %s", tostring(currentBalance), currencyName, summonAmount, tostring(totalCost), currencyName)
+    local isEnough, totalCost, currentBalance, currencyName, costPerPull, maxAffordablePulls, optimalPulls = getOptimalSummonAmount()
+    if isEnough then
+        CurrencyLabel.Text = string_format("Balance: %s %s | Auto-Pull: x%d (%s %s)", tostring(currentBalance), currencyName, optimalPulls, tostring(totalCost), currencyName)
+    else
+        CurrencyLabel.Text = string_format("Balance: %s %s | Cost (x1): %s %s", tostring(currentBalance), currencyName, tostring(costPerPull), currencyName)
+    end
     CanOpenLabel.Text = string_format("🎫 Can Open: %s pulls (%s)", tostring(maxAffordablePulls), currencyName)
 
     local nowSummonCount = getBannerTotalSummonCount(selectedBanner)
@@ -971,7 +962,7 @@ local function updateCurrencyState()
     if not isEnough then
         if isAutoSummoning then
             isAutoSummoning = false
-            StatusLabel.Text = string_format("⚠️ STOPPED: Out of %s (%s/%s) | Total: %d", currencyName, tostring(currentBalance), tostring(totalCost), currentSessionPulls)
+            StatusLabel.Text = string_format("⚠️ STOPPED: Out of %s (%s/%s) | Total: %d", currencyName, tostring(currentBalance), tostring(costPerPull), currentSessionPulls)
             StatusLabel.TextColor3 = currentTheme.Danger
         end
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 190, 205); ToggleBtn.Text = "⛔ NOT ENOUGH CURRENCY"; ToggleBtn.AutoButtonColor = false
@@ -982,10 +973,10 @@ local function updateCurrencyState()
             StatusLabel.Text = string_format("Status: Idle | Total: %d", currentSessionPulls); StatusLabel.TextColor3 = currentTheme.SubText
         else
             ToggleBtn.BackgroundColor3 = currentTheme.Danger; ToggleBtn.Text = "⏸ STOP AUTO SUMMON"
-            StatusLabel.Text = string_format("Status: Silent Pulling (%s)... | Total: %d", selectedBanner, currentSessionPulls); StatusLabel.TextColor3 = currentTheme.Success
+            StatusLabel.Text = string_format("Status: Dynamic Pulling x%d (%s)... | Total: %d", optimalPulls, selectedBanner, currentSessionPulls); StatusLabel.TextColor3 = currentTheme.Success
         end
     end
-    return isEnough
+    return isEnough, optimalPulls
 end
 
 local function renderBannerButtons()
@@ -1015,29 +1006,20 @@ end
 renderBannerButtons()
 BannerDropdown.MouseButton1Click:Connect(function() renderBannerButtons(); BannerListFrame.Visible = not BannerListFrame.Visible end)
 
-local function updateAmountUI()
-    local chips = { {BtnX1, 1}, {BtnX10, 10}, {BtnX50, 50} }
-    for _, item in ipairs(chips) do
-        local selected = (summonAmount == item[2])
-        tween(item[1], { BackgroundColor3 = selected and currentTheme.Accent or currentTheme.CardBg, BackgroundTransparency = selected and 0 or currentTheme.CardTrans, TextColor3 = selected and currentTheme.AccentText or currentTheme.SubText })
-    end
-    updateCurrencyState()
-end
-
-BtnX1.MouseButton1Click:Connect(function() summonAmount = 1; updateAmountUI() end)
-BtnX10.MouseButton1Click:Connect(function() summonAmount = 10; updateAmountUI() end)
-BtnX50.MouseButton1Click:Connect(function() summonAmount = 50; updateAmountUI() end)
-
 ToggleBtn.MouseButton1Click:Connect(function()
-    if not updateCurrencyState() then return end
+    local isEnough = updateCurrencyState()
+    if not isEnough then return end
     isAutoSummoning = not isAutoSummoning
     if isAutoSummoning then
         if skipAnimation then pcall(function() Nodes.CHANGE_SETTING:FireServer("FastSummon", true) end) end
         ToggleBtn.BackgroundColor3 = currentTheme.Danger; ToggleBtn.Text = "⏸ STOP AUTO SUMMON"
         task_spawn(function()
             while isAutoSummoning do
-                if not checkCurrencyRequirement() then isAutoSummoning = false; updateCurrencyState(); break end
-                Nodes.BANNER_SUMMON:FireServer(selectedBanner, summonAmount)
+                local canSummon, _, _, _, _, _, pullAmount = getOptimalSummonAmount()
+                if not canSummon or pullAmount <= 0 then
+                    isAutoSummoning = false; updateCurrencyState(); break
+                end
+                Nodes.BANNER_SUMMON:FireServer(selectedBanner, pullAmount)
                 updateCurrencyState()
                 task_wait(skipAnimation and 0.12 or 0.5)
             end
